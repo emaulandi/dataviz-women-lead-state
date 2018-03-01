@@ -16,6 +16,10 @@ var svg = d3.select("svg")
 		.append("g")
 		.attr("transform", "translate(" + marginSide + "," + marginSide + ")");
 
+// Create Zone for Sum Days per continent
+var SumDaysSelector = d3.select("div", "#tabSumYears");
+
+
 
 /// TOOLTIP ///
 // Add a div that will go wherever in the body 
@@ -64,10 +68,10 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
   		})
   		.entries(womendata)
   	
-  	console.log(nestWomen);
+  	console.log('nestWomen:',nestWomen);
   	
   	//Nesting an rollup to know total days for one continent
-  	var nestWomenSum = d3.nest()
+  	var nestWomenSumContinent = d3.nest()
   		.key(function(d){ 
   			return d.continent; 
   		})
@@ -76,33 +80,52 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
   		})
   		.entries(womendata)
     
-    console.log(nestWomenSum);
+    console.log('nestWomenSumContinent:',nestWomenSumContinent);
     
+    //Double Nesting to know list of countries for each continent
+    var nestContCountry = d3.nest()
+    	.key(function(d){ 
+  			return d.continent; 
+  		})
+  		.key(function(d){ 
+  			return d.country; 
+  		})
+  		.entries(womendata)
+  		
+  	console.log('nestContCountry:',nestContCountry); 
+
+  	var countCountryByContinent = [] ;
+  	
+  	// Compute # of countries for each continent
+  	nestContCountry.forEach( (e) => {
+  		countCountryByContinent.push({'continent':e.key,'countCountry':e.values.length});
+  	});
+  	
+  	console.log('countCountryByContinent:',countCountryByContinent);  		
+    
+    // ADDING A SUM SECTION BY CONTINENT
+
+	var offset = marginSide * 2;
+	
+	nestWomenSumContinent.forEach( (o) => {
+    	SumDaysSelector.append("text").text(o.key)
+    		.attr('class','sumContinent')
+    		.style('font-size', fontSizeContinent(o.value) + "px")
+    		.style('color', color(o.key))
+			// On utilise style pour définir l'endroit d'affichage
+			.style("left", spaceContinentSum(countCountryByContinent, o.key, width, offset) + "px");
+			//.style("top", (d3.event.pageY) + "px");
+    });
+    
+    // Creating scales //
     var minStartDate = d3.min(womendata, function(d) { return d.mandateStart ; }); 
 	var maxEndDate = d3.max(womendata, function(d) { return d.mandateEnd ; });
     var daysTotal = d3.timeDay.count(minStartDate,maxEndDate);
     console.log("daysTotal:",daysTotal);
-    
-	// Creating scales //
+
 
 	var yScale = d3.scaleTime()
-		//.domain([new Date(2010,1,1), new Date(2017,1,1)])
 		.range([height,0]);
-
-	//ça ne fait rien
-	//yScale.tickFormat(d3.timeFormat("%%d/%m/%Y"));
-	
-	//USING ID AS X SCALE
-	/*
-	var xScale = d3.scaleLinear()
-	.domain([0, 10])
-	.range([0, width]);
-
-	var xAxis = d3.axisBottom(xScale);
-	svg.append("g")
-		.attr("transform", "translate(" + 0 + "," + height + ")")
-		.call(xAxis);
-	*/
 	
 	//USING COUNTRY NAME AS X SCALE
 	var xScale = d3.scaleBand().rangeRound([0, width]);
@@ -136,7 +159,8 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
 	.attr("y", 
 		(d,i) => {return yScale(d.mandateEnd);})
 	.attr("width", 5)
-	//.attr("height",30)
+	.attr("rx", 3)
+	.attr("ry", 3)
 	.attr("height",
 		(d,i) => {
 			return rectHeight(d.mandateDuration,daysTotal,height);
@@ -144,7 +168,7 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
 	)
 	.style("fill", (d,i) => {return color(d.continent);})
 	.on("mouseover", function(d) {
-		
+           
   		tooltip.transition()
        		.duration(500)
        		.style("opacity", .9);
@@ -191,11 +215,72 @@ function print(women) {
 	// trouver comment on fait la break ligne
 	var timeFormat = d3.timeFormat("%d/%m/%Y");
 	
-	return `name:${women.name},
-	country:${women.country}, 
-	mandate start :${timeFormat(women.mandateStart)}, 
-	mandate end:${timeFormat(women.mandateEnd)}`;
+	// later to include link '<a href= "http://google.com">' + formatTime(d.date) + 	"</a>" 
+	return '<b>Name:</b>' + women.name 
+			+ '<br/> <b> Country: </b>' + women.country
+			+ '<br/> <b> Mandate: </b>' + timeFormat(women.mandateStart) + '-' + timeFormat(women.mandateEnd);
+	
 }
+
+function printYearsDays(o) {
+	var years = Math.trunc(o.value / 365);
+	var days = o.value - years*365
+	 
+	return `${years} years 
+	and ${days} days. `
+}
+
+function fontSizeContinent(sumDays){
+	var years = Math.trunc(sumDays / 365);
+	var fontSize;
+	if (years < 50){
+		fontSize = 11;
+	}
+	else if (years >= 50 && years < 100){
+		fontSize = 14;
+	}
+	else if (years >= 100 && years < 200){
+		fontSize = 20;
+	}
+	else if (years >= 200){
+		fontSize = 26;
+	}
+	return fontSize;
+}
+
+//countCountryByContinent.push({'continent':e.key,'countCountry':e.values.length});
+function spaceContinentSum(countCountryByContinent, continent, width, offset){
+
+	var sumCountry = 0;
+	
+	countCountryByContinent.forEach( (e) => {
+		sumCountry += e.countCountry;
+	});
+	//console.log(sumCountry);
+	
+	var space = (width - 2*marginSide) / sumCountry ;
+	// MAIS NOOONNN CA PREND PAS EN COMPTE EUX QUI SE SUPPERPOOOOSE ET OUIII
+	
+	
+	var countCountry = 0;
+	
+	for(var i = 0; i < countCountryByContinent.length; i++){
+	
+		if (continent == countCountryByContinent[i].continent){
+			break;
+		}
+		else {
+			countCountry += countCountryByContinent[i].countCountry;
+		}
+	}
+	//console.log(countCountry);	
+	return space * countCountry + offset ;
+
+}
+
+
+
+
 
 
 
