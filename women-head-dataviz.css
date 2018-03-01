@@ -1,9 +1,17 @@
 .tooltip {
 	position: absolute;
-	width: 300px;
-	height: 300px;
-	stroke: 1px;
+	width: 230px;
+	height: 40px;
+	stroke: black;
 	pointer-events: none;
-	font-size: 12px;
+	font-size: 12px;			
+    padding: 5px;				
+    background: white;
+    border: 1px solid gray;
+    border-radius: 8px;	
+    padding: 5px;	
 }
 
+.sumContinent {
+	position: absolute;
+}
