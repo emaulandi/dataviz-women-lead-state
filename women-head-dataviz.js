@@ -3,7 +3,7 @@
 
 // DEFINE DRAWING AREA SIZING
 var height = 500;
-var width = 1300;
+var width = 800;
 var marginTop = 10;
 var marginBottom = 150;
 var marginSide = 30;
@@ -17,14 +17,15 @@ var svg = d3.select("svg")
 		.attr("transform", "translate(" + marginSide + "," + marginSide + ")");
 
 // Create Zone for Sum Days per continent
-var SumDaysSelector = d3.select("div", "#tabSumYears");
+var SumDaysSelector = d3.select("#tabSumYears");
 
 
 
 /// TOOLTIP ///
 // Add a div that will go wherever in the body 
 var tooltip = d3.select("body").append("div")
-	.attr("class", "tooltip");
+	.attr("class", "tooltip")
+	.style("opacity", 0);;
 
 
 
@@ -70,6 +71,13 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
   	
   	console.log('nestWomen:',nestWomen);
   	
+  	// Select Data for continent
+  	var selectedWomen = nestWomen.filter( (d) => {
+  		return d.key == 'Africa';
+  	});
+  	console.log('selectedWomen:',selectedWomen);
+  	  	
+  	
   	//Nesting an rollup to know total days for one continent
   	var nestWomenSumContinent = d3.nest()
   		.key(function(d){ 
@@ -103,11 +111,32 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
   	
   	console.log('countCountryByContinent:',countCountryByContinent);  		
     
-    // ADDING A SUM SECTION BY CONTINENT
+    // A DROPDOWN SELECTION FOR THE CONTINENT
+    var continentMenu = d3.select("#continentDropdown");
 
-	var offset = marginSide * 2;
-	
+	continentMenu.append("select")
+	  .selectAll("option")
+		  .data(nestWomen)
+		  .enter()
+		  .append("option")
+		  .attr("value", function(d){
+		      return d.key;
+		  })
+		  .text(function(d){
+		      return d.key;
+		  })
+    
+    continentMenu.on('change', () => {
+    	var selectedContinent = d3.select("select").property("value");
+    	console.log("selectedContinent",selectedContinent);
+    	updateDrawContinent(nestWomen,selectedContinent,nestWomenSumContinent);
+    });
+    
+    // ADDING A SUM SECTION BY CONTINENT
+    /*
 	nestWomenSumContinent.forEach( (o) => {
+		//console.log('nestWomenSumContinent',nestWomenSumContinent);
+    	
     	SumDaysSelector.append("text").text(o.key)
     		.attr('class','sumContinent')
     		.style('font-size', fontSizeContinent(o.value) + "px")
@@ -115,8 +144,186 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
 			// On utilise style pour définir l'endroit d'affichage
 			.style("left", spaceContinentSum(countCountryByContinent, o.key, width, offset) + "px");
 			//.style("top", (d3.event.pageY) + "px");
+		
     });
+    */
     
+        
+	//draw(womendata);
+	drawContinent(nestWomen,'Africa');
+    
+});
+
+function updateDrawContinent(nest, continent, nestWomenSumContinent) {
+	// Select Data for continent
+  	var selectedWomen = nest.filter( (d) => {
+  		return d.key == continent;
+  	});
+  	console.log('selectedWomen:',selectedWomen);
+  	
+  	var data = selectedWomen[0].values;
+  	console.log('data:',data);
+  	
+  	// Creating scales //
+    var minStartDate = d3.min(data, function(d) { return d.mandateStart ; }); 
+	var maxEndDate = d3.max(data, function(d) { return d.mandateEnd ; });
+    var daysTotal = d3.timeDay.count(minStartDate,maxEndDate);
+    console.log("daysTotal:",daysTotal);
+
+	var yScale = d3.scaleTime()
+		.range([height,0]);
+		
+	// AVANT DE BINDER LES DATA !!! SINON LE SCALE EST FAUX 
+	// Pourquoi ??
+	yScale.domain([minStartDate,maxEndDate]);
+	// RE-CALL Y AXIS
+	svg.select('.yaxis').transition().call(d3.axisRight(yScale));
+
+	//USING COUNTRY NAME AS X SCALE
+	var xScale = d3.scaleBand().range([0, width]);
+	xScale.domain(data.map(function(d) { return d.country; }));
+	
+	var xAxis = d3.axisBottom(xScale);
+	
+	var xAxisSelector = svg.select('.xaxis')
+		.transition()
+		.call(xAxis)
+		.selectAll("text")  
+			.style("text-anchor", "end")
+			.style("font-size", "9px")
+			.attr("dx", "-10px")
+			.attr("dy", "-6px")
+			.attr("transform", "rotate(-90)");
+	
+	
+		
+	//CALL HERE THE DRAWING FUNCTION
+    // WOMENDATA IS NOT DEFINED OUTSIDE
+    // Bind data
+    var selection = svg.selectAll("rect")
+    	.remove()
+    	.exit()
+    	.data(data);
+    
+    selection.enter()
+	.append("rect")
+	// PAS BESOIN de faire une fonction RATIO, on peut appliquer direct les scales!
+	.on("mouseover", function(d) {
+		handleOnTooltip(d,tooltip);
+	})
+	.on("mouseout", function(d) {
+		handleOutTooltip(d,tooltip);
+	})
+	.attr("x", 
+		(d,i) => {return xScale(d.country);})
+	.attr("y", 
+		(d,i) => {return yScale(d.mandateEnd);})
+	.transition(3000)
+	.attr("width", 10)
+	.attr("rx", 5)
+	.attr("ry", 5)
+	.attr("height",
+		(d,i) => {
+			return rectHeight(d.mandateDuration,daysTotal,height);
+		}
+	)
+	.style("fill", (d,i) => {return color(d.continent);});
+	
+	
+	
+	// ADDING VALUE LENGHT
+	var length ;
+		
+	nestWomenSumContinent.forEach( (o) => {
+		if (o.key == continent) { return length = o.value ; }
+	});
+	
+	SumDaysSelector.text(printYearsDays(length))
+    		.attr('class','sumContinent')
+    		// do not work anymore due to number instead of nest passed as argument
+    		//.style('font-size', fontSizeContinent(continent) + "px")
+    		//.style('color', color(continent))
+    		;
+	
+}
+
+function drawContinent(nest, continent) {
+
+	// Select Data for continent
+  	var selectedWomen = nest.filter( (d) => {
+  		return d.key == continent;
+  	});
+  	console.log('selectedWomen:',selectedWomen);
+  	
+  	var data = selectedWomen[0].values;
+  	console.log('data:',data);
+  	
+  	// Creating scales //
+    var minStartDate = d3.min(data, function(d) { return d.mandateStart ; }); 
+	var maxEndDate = d3.max(data, function(d) { return d.mandateEnd ; });
+    var daysTotal = d3.timeDay.count(minStartDate,maxEndDate);
+    //console.log("daysTotal:",daysTotal);
+
+	var yScale = d3.scaleTime()
+		.range([height,0]);
+			
+	// AVANT DE BINDER LES DATA !!! SINON LE SCALE EST FAUX 
+	// Pourquoi ??
+	yScale.domain([minStartDate,maxEndDate]);
+	
+	// CALL Y AXIS
+	svg.append("g").attr("class", "yaxis").call(d3.axisRight(yScale));
+
+	//USING COUNTRY NAME AS X SCALE
+	var xScale = d3.scaleBand().range([0, width]);
+	xScale.domain(data.map(function(d) { return d.country; }));
+	
+	var xAxis = d3.axisBottom(xScale);
+	var xAxisSelector = svg.append("g")
+		.attr("class", "xaxis")
+		.attr("transform", "translate(" + 0 + "," + height + ")")
+		.call(xAxis)
+			.selectAll("text")  
+			.style("text-anchor", "end")
+			.style("font-size", "9px")
+			.attr("dx", "-10px")
+			.attr("dy", "-6px")
+			.attr("transform", "rotate(-90)");
+		
+		
+	//CALL HERE THE DRAWING FUNCTION
+    // WOMENDATA IS NOT DEFINED OUTSIDE
+    // Bind data
+    var selection = svg.selectAll("rect")
+		.data(data)
+		.enter()
+		.append("rect")
+		// PAS BESOIN de faire une fonction RATIO, on peut appliquer direct les scales!
+		.attr("x", 
+			(d,i) => {return xScale(d.country);})
+		.attr("y", 
+			(d,i) => {return yScale(d.mandateEnd);})
+		.attr("width", 10)
+		.attr("rx", 5)
+		.attr("ry", 5)
+		.attr("height",
+			(d,i) => {
+				return rectHeight(d.mandateDuration,daysTotal,height);
+			}
+		)
+		.style("fill", (d,i) => {return color(d.continent);})
+		.on("mouseover", function(d) {
+			handleOnTooltip(d,tooltip);
+		})
+		.on("mouseout", function(d) {
+			handleOutTooltip(d,tooltip);
+		});
+	
+	
+}
+
+function draw(womendata){
+
     // Creating scales //
     var minStartDate = d3.min(womendata, function(d) { return d.mandateStart ; }); 
 	var maxEndDate = d3.max(womendata, function(d) { return d.mandateEnd ; });
@@ -159,8 +366,8 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
 	.attr("y", 
 		(d,i) => {return yScale(d.mandateEnd);})
 	.attr("width", 5)
-	.attr("rx", 3)
-	.attr("ry", 3)
+	.attr("rx", 5)
+	.attr("ry", 5)
 	.attr("height",
 		(d,i) => {
 			return rectHeight(d.mandateDuration,daysTotal,height);
@@ -168,32 +375,17 @@ d3.csv("3-WomenHeadOfStateClean.csv", function(women) {
 	)
 	.style("fill", (d,i) => {return color(d.continent);})
 	.on("mouseover", function(d) {
-           
-  		tooltip.transition()
-       		.duration(500)
-       		.style("opacity", .9);
-
-       	// $(selector).html(content) >> ici on utilise pas $ > car sélecteur d3 : on a déjà fait var tooltip = d3.select("body").append("div") ...
-		tooltip.html(print(d))
-			// On utilise style pour définir l'endroit d'affichage
-		   .style("left", (d3.event.pageX) + "px")
-		   .style("top", (d3.event.pageY) + "px");
-		   /* => Comment faire pour référencer le centre du rond : eg les attributs cx et cy de l'élément circle
-		   .style("left", (this.attr("cx") + "px"))
-		   .style("top", (this.attr("cy") + "px")); 
-		   */  
-	  })
-	  .on("mouseout", function(d) {
-		  tooltip.transition()
-		       .duration(500)
-		       .style("opacity", 0);
-	  });
+		handleOnTooltip(d,tooltip);
+	})
+	.on("mouseout", function(d) {
+		handleOutTooltip(d,tooltip);
+	});
 		
 	// CALL Y AXIS
 	svg.append("g").call(d3.axisRight(yScale));
 
-    
-});
+
+}
 
 function rectHeight(mandateDuration,totalDays, height){
 	return (mandateDuration * height) / totalDays ;
@@ -211,6 +403,30 @@ function color(continent){
 	
 }
 
+function handleOnTooltip(d, tooltip) {
+	tooltip.transition()
+   		.duration(500)
+   		.style("opacity", .9);
+
+   	// $(selector).html(content) >> ici on utilise pas $ > car sélecteur d3 : on a déjà fait var tooltip = d3.select("body").append("div") ...
+	tooltip.html(print(d))
+		// On utilise style pour définir l'endroit d'affichage
+	   .style("left", (d3.event.pageX) + "px")
+	   .style("top", (d3.event.pageY) + "px");
+	   /* => Comment faire pour référencer le centre du rond : eg les attributs cx et cy de l'élément circle
+	   .style("left", (this.attr("cx") + "px"))
+	   .style("top", (this.attr("cy") + "px")); 
+	   */ 
+}
+
+function handleOutTooltip(d, tooltip) {
+	tooltip.transition()
+       .duration(500)
+       .style("opacity", 0);
+}
+
+
+
 function print(women) {
 	// trouver comment on fait la break ligne
 	var timeFormat = d3.timeFormat("%d/%m/%Y");
@@ -222,12 +438,11 @@ function print(women) {
 	
 }
 
-function printYearsDays(o) {
-	var years = Math.trunc(o.value / 365);
-	var days = o.value - years*365
+function printYearsDays(number) {
+	var years = Math.trunc(number / 365);
+	var days = number - years*365
 	 
-	return `${years} years 
-	and ${days} days. `
+	return "Total lenght of mandates : " + years + " years, " + days + " days.";
 }
 
 function fontSizeContinent(sumDays){
